@@ -1,6 +1,91 @@
 //Designed to bring in mech specs based on text description stored in character bio.
 //Uses SSW formatting
+// 1: Load mech in SSW
+// 2: copy mech data to clipboard
+// 3: paste mech data in the "bio" part of the character sheet
+// 4: type "!ResetMech". Can also type "!ResetMech:(Character Name)" and reset
+// someone else's sheet for them
 var BTImportMech = BTImportMech || (function(){
+    
+    //Keys are attribute variable names in Roll20
+    //Values are keys for armorVal structure used to call setArmor
+    var armorAttr = {
+            "lefttorso_armor"       : "L/R Torso",
+            "righttorso_armor"      : "L/R Torso",
+            "centertorso_armor"     : "Center Torso",
+            "lefttorso_rear_armor"  : "L/R Torso (rear)",
+            "righttorso_rear_armor" : "L/R Torso (rear)",
+            "centertorso_rear_armor": "Center Torso (rear)",
+            "leftarm_armor"         : "L/R Arm",
+            "rightarm_armor"        : "L/R Arm",
+            "leftleg_armor"         : "L/R Leg",
+            "rightleg_armor"        : "L/R Leg",
+            "head_armor"            : "Head"
+    }
+    
+    //Keys are attribute variable names in Roll20
+    //Values are keys for armorVal structure used to call setArmor
+    var structAttr = {
+            "lefttorso_internalstructure"   : "L/R Torso",
+            "righttorso_internalstructure"  : "L/R Torso",
+            "centertorso_internalstructure" : "Center Torso",
+            "leftarm_internalstructure"     : "L/R Arm",
+            "rightarm_internalstructure"    : "L/R Arm",
+            "leftleg_internalstructure"     : "L/R Leg",
+            "rightleg_internalstructure"    : "L/R Leg",
+            "head_internalstructure"        : "Head"
+    }
+    
+    var MPAttr = {
+        "mech_walk":0,
+        "mech_run":0,
+        "mech_sprint":0,
+        "mech_jump":0
+    }
+        
+    var miscAttr = {
+        "mech_name":"Gundam",
+        "mech_tonnage":0
+    }
+        
+        
+    var attrIndex = [
+        armorAttr,
+        structAttr,
+        MPAttr,
+        miscAttr
+        ]
+    //Checks if an attribute is defined for a character already
+    function attrUndefined(charID, attr){
+        attrObj = findObjs({
+            _characterid: charID,
+            _type: "attribute",
+            name: attr
+        })[0];
+        
+        if (attrObj === undefined){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    //Creates attributes if they don't exist. Should be run before any function
+    //that modifies attributes.
+    function setAttr(charID) {
+        for (type in attrIndex){ 
+          for (attr in attrIndex[type]){
+              if (attrUndefined(charID,attr)){
+                    createObj("attribute", {
+                        name: attr,
+                        characterid: charID
+                    });
+              }
+          }
+        }
+    }
+
+    
     function setName(charID,name) {
         var mechAttr = findObjs({
             _characterid: charID,
@@ -18,10 +103,6 @@ var BTImportMech = BTImportMech || (function(){
             name: "mech_tonnage"
         })[0];
         mechAttr.set("current",ton);
-        mechAttr = findObjs({
-            _characterid: charID,
-            _type: "attribute"
-        });
         return;
     }
     
@@ -39,10 +120,10 @@ var BTImportMech = BTImportMech || (function(){
             mechArmor[headKey] = headValue;
         } 
         //Matching all entries of torso armor and internal structure
-        torso = mechData.match(/(\S* Torso [\(\)a-z]*)\s*(\d)*\s*(\d)*/g);
+        torso = mechData.match(/(([\w\/])* Torso [\(\)a-z]*)\s*(\d)*\s*(\d)*/g);
         arrlength = torso.length;
         for (var i=0; i<arrlength; i++){
-            torsoKey = torso[i].match(/\S* Torso( \(rear\))?/g);
+            torsoKey = torso[i].match(/([\w\/])* Torso( \(rear\))?/g);
             torsoValue = torso[i].match(/(\d)+/g);
             mechArmor[torsoKey] = torsoValue;
         }
@@ -63,166 +144,44 @@ var BTImportMech = BTImportMech || (function(){
             legValue = leg[i].match(/(\d)+/g);
             mechArmor[legKey] = legValue;
         } 
-        
+        log(mechArmor);
         return mechArmor;
     }
     
-    //Sets armor and internal structure values
     function setArmor(charID, armorVal){
-        LTArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "lefttorso_armor"
-        })[0];
-        LTArmor.set("max",armorVal["L/R Torso"][1]);
-        LTArmor.set("current",armorVal["L/R Torso"][1]);
+        //Will go through each entry in the armorAttr table and set armor values
+        for (attr in armorAttr){
+            //Grabbing the values for this location inside passed armorVal object
+            //Currently based on text input in Bio section
+            armorStats = armorVal[armorAttr[attr]];
+            //Armor is the last value in all entries
+            armorIndex = armorStats.length - 1;
+            armorObj = findObjs({
+                _characterid: charID,
+                _type: "attribute",
+                name: attr
+            })[0];
+            armorObj.set("current",armorStats[armorIndex]); 
+            armorObj.set("max",armorStats[armorIndex]);
+        }
         
-        RTArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "righttorso_armor"
-        })[0];
-        RTArmor.set("max",armorVal["L/R Torso"][1]);
-        RTArmor.set("current",armorVal["L/R Torso"][1]);
-        
-        CTArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "centertorso_armor"
-        })[0];
-        CTArmor.set("max",armorVal["Center Torso"][1]);
-        CTArmor.set("current",armorVal["Center Torso"][1]);
-        
-        LTRArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "lefttorso_rear_armor"
-        })[0];
-        LTRArmor.set("max",armorVal["L/R Torso (rear)"][0]);
-        LTRArmor.set("current",armorVal["L/R Torso (rear)"][0]);
-        
-        RTRArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "righttorso_rear_armor"
-        })[0];
-        RTRArmor.set("max",armorVal["L/R Torso (rear)"][0]);
-        RTRArmor.set("current",armorVal["L/R Torso (rear)"][0]);
-        
-        CTRArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "centertorso_rear_armor"
-        })[0];
-        CTRArmor.set("max",armorVal["Center Torso (rear)"][0]);
-        CTRArmor.set("current",armorVal["Center Torso (rear)"][0]);
-        
-        LAArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "leftarm_armor"
-        })[0];
-        LAArmor.set("max",armorVal["L/R Arm"][1]);
-        LAArmor.set("current",armorVal["L/R Arm"][1]);
-        
-        RAArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "rightarm_armor"
-        })[0];
-        RAArmor.set("max",armorVal["L/R Arm"][1]);
-        RAArmor.set("current",armorVal["L/R Arm"][1]);
-        
-        LLArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "leftleg_armor"
-        })[0];
-        LLArmor.set("max",armorVal["L/R Leg"][1]);
-        LLArmor.set("current",armorVal["L/R Leg"][1]);
-        
-        RLArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "rightleg_armor"
-        })[0];
-        RLArmor.set("max",armorVal["L/R Leg"][1]);
-        RLArmor.set("current",armorVal["L/R Leg"][1]);
-        
-        HArmor = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "head_armor"
-        })[0];
-        HArmor.set("max",armorVal["Head"][1]);
-        HArmor.set("current",armorVal["Head"][1]);
-        
-        LTInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "lefttorso_internalstructure"
-        })[0];
-        LTInternal.set("max",armorVal["L/R Torso"][0]);
-        LTInternal.set("current",armorVal["L/R Torso"][0]);
-        
-        RTInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "righttorso_internalstructure"
-        })[0];
-        RTInternal.set("max",armorVal["L/R Torso"][0]);
-        RTInternal.set("current",armorVal["L/R Torso"][0]);
-        
-        CTInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "centertorso_internalstructure"
-        })[0];
-        CTInternal.set("max",armorVal["Center Torso"][0]);
-        CTInternal.set("current",armorVal["Center Torso"][0]);
-        
-        LAInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "leftarm_internalstructure"
-        })[0];
-        LAInternal.set("max",armorVal["L/R Arm"][0]);
-        LAInternal.set("current",armorVal["L/R Arm"][0]);
-        
-        RAInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "rightarm_internalstructure"
-        })[0];
-        RAInternal.set("max",armorVal["L/R Arm"][0]);
-        RAInternal.set("current",armorVal["L/R Arm"][0]);
-        
-        LLInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "leftleg_internalstructure"
-        })[0];
-        LLInternal.set("max",armorVal["L/R Leg"][0]);
-        LLInternal.set("current",armorVal["L/R Leg"][0]);
-        
-        RLInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "rightleg_internalstructure"
-        })[0];
-        RLInternal.set("max",armorVal["L/R Leg"][0]);
-        RLInternal.set("current",armorVal["L/R Leg"][0]);
-        
-        HInternal = findObjs({
-            _characterid: charID,
-            _type: "attribute",
-            name: "head_internalstructure"
-        })[0];
-        HInternal.set("max",armorVal["Head"][0]);
-        HInternal.set("current",armorVal["Head"][0]);
-        
-        return;
+        //will go through each entry in the structAttr table and set structure values
+        for (attr in structAttr){
+            structStats = armorVal[structAttr[attr]];
+            //Structure is the first value in all entries with structure
+            //Do not need variable, since it's always 0
+            structObj = findObjs({
+                _characterid: charID,
+                _type: "attribute",
+                name: attr
+            })[0];
+            structObj.set("current",structStats[0]);
+            structObj.set("max",structStats[0]);
+            
+        }
     }
+    
+    
     
     function getMP(mechData){
         var mechMove = {};
@@ -281,9 +240,23 @@ var BTImportMech = BTImportMech || (function(){
         mechJump.set("current",moveProfile["Jumping MP"][0]);
         mechSprint.set("current",sprintSpeed);
     }
+    // Since I'm not going to fully use getEngine until I get the 
+    // creating crit slots down, going to leave it commented
+    //function getEngine(mechData){
+    //    var mechEngine
+    //    //Finds the engine type (just reads the first word)
+    //    engine = mechData.match(/Engine:\s/g);
+    //    arrlength = engine.length;
+    //    for (var i=0; i<arrlength; i++){
+    //        engineKey = engine[i].match(/Engine:\s/g);
+     //       engineValue = engine[i].match(/\w+/g);
+    //        mechEngine[enginekey] = engineValue;
+    //    return mechEngine    
+    //}
     
     function resetMech(charID,bio) {
         //Divide input into 3 blocks, based on SSW output
+        setAttr(charID);
         mechSpec = bio.split("================================================================================");
         var mechData = mechSpec[0].split("<br>");
         name = mechData[0];
@@ -300,15 +273,16 @@ var BTImportMech = BTImportMech || (function(){
     return {
         //Only make ResetMech visible, don't want to make individual functions
         //available for general use
-      ResetMech: resetMech  
+      ResetMech: resetMech
     };
 })();
 
 on("chat:message", function (msg) {
     if (msg.type == "api" && msg.content.indexOf("!ResetMech") !== -1) {
-        var params = msg.content.split(" ");
+        var params = msg.content.split(":");
         playerCount = params.length-1;
         var charID = [];
+        var chatOut = [];
         
         //Only adds the caller's name to list of mechs to reset
         if (params.length == 1){
@@ -317,30 +291,49 @@ on("chat:message", function (msg) {
                 _type: "character",
                 controlledby : msg.playerid,
             }); 
-            charID = (currentChar[0].id);
+            charID.push(currentChar[0].id);
         }
-        /*
+        
         //Adds the mechs of all parameters
         else {
             log(params);
+            //skip the API call, take only character names
             for (var i=1; i<=playerCount;i++){
                 var playerChar = findObjs({
                     _type: "character",
                     name : params[i]
                 }); 
-                charID.push(playerChar[0].id);
+                if (playerChar.length<=0){
+                    chatOut.push(params[i]+ " does not exist");
+                }
+                else {
+                    charID.push(playerChar[0].id);
+                }
             }
             
         }
-        log(charID);*/
         
-//        for (var j=0; j<playerCount; j++){
-            var character = getObj("character", charID);
+        var charID_pass = {};
+        for (i in charID){
+            charID_pass = charID[i];
+            var character = getObj("character", charID_pass);
             character.get("bio", function(bio) {
-                BTImportMech.ResetMech(charID,bio);
+                if (bio === "null"){
+                    chatOut.push(character.get("name")+" has no data");
+                }
+                else {
+                    BTImportMech.ResetMech(charID_pass,bio);
+                }
             });
-//        }
-
+        }
+        log("Shit went down:");
+        
+        for (i in chatOut){
+            sendChat(msg.who,chatOut[i]);
+            log(chatOut[i]);
+        }
         sendChat(msg.who,"All done");
     }
 });
+//Status API Training Shop Blog About
+//© 2015 GitHub, Inc. Terms Privacy Security Contact
